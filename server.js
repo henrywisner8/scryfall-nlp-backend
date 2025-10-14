@@ -183,10 +183,14 @@ t:creature t:instant t:sorcery t:artifact t:enchantment t:planeswalker t:land
 t:legendary (legendary supertype)
 Creature subtypes: t:dinosaur t:dragon t:elf t:goblin t:zombie t:vampire t:angel t:demon
 
-ORACLE TEXT:
-o:flying o:deathtouch o:lifelink o:trample o:haste o:vigilance
-o:"draw a card" (exact phrases in quotes)
-o:destroy o:exile o:counter
+KEYWORD ABILITIES (IMPORTANT)
+- Use kw:<keyword> (alias: keyword:<keyword>) for actual keyword abilities.
+  Examples: kw:flying kw:first strike kw:deathtouch kw:lifelink kw:menace kw:trample kw:haste kw:vigilance kw:hexproof
+- Use o:<text> only for literal words/phrases appearing in the rules text.
+  Examples: o:"draw a card" o:destroy o:exile
+- If the user says “with flying / has flying / keyword flying”, use kw:flying.
+- If the user says “cards that say ‘flying’ in the text”, use o:flying.
+
 
 ORACLE TEXT:
 o:"draw a card" (exact phrases in quotes)
