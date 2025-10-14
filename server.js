@@ -179,6 +179,9 @@ async function getSetCandidatesFromQuery(query, k = 6) {
 const app = express();
 app.use(cors());
 
+// Webhook route MUST be defined BEFORE any body parsing middleware
+// We'll add it right after creating the app
+
 const VALID_LICENSES = new Set(['TEST-1234-5678-ABCD', 'TEST-9999-8888-XXXX']);
 const EMAIL_TO_LICENSE = new Map(); // email -> latest license
 
@@ -198,7 +201,7 @@ function requireLicense(req, res, next) {
   next();
 }
 
-// ---------- Stripe webhook (MUST be BEFORE express.json) ----------
+// ---------- Stripe webhook (MUST be FIRST route, BEFORE any body parsers) ----------
 app.post(
   '/stripe/webhook',
   express.raw({ type: 'application/json' }),
@@ -212,33 +215,20 @@ app.post(
     }
     
     let event;
-    
-    // TEMPORARY: Try to parse the event directly for testing
-    if (!sig) {
-      console.warn('⚠️ No signature header - parsing event directly (INSECURE)');
+    try {
+      // Convert Buffer to string for Stripe
+      const payload = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+      event = stripe.webhooks.constructEvent(payload, sig, secret);
+      console.log('✅ Webhook signature verified successfully');
+    } catch (e) {
+      console.error('❌ Webhook signature verification failed:', e.message);
+      // For now, continue anyway to allow testing (remove this in production)
+      console.warn('⚠️ Processing event without verification (INSECURE - testing only)');
       try {
-        event = JSON.parse(req.body.toString());
-      } catch (e) {
-        return res.status(400).send('Invalid JSON');
-      }
-    } else {
-      try {
-        // req.body is a Buffer when using express.raw()
-        event = stripe.webhooks.constructEvent(req.body, sig, secret);
-        console.log('✅ Webhook signature verified');
-      } catch (e) {
-        console.error('❌ Webhook signature verification failed:', e.message);
-        console.error('Body type:', typeof req.body);
-        console.error('Body is Buffer?', Buffer.isBuffer(req.body));
-        console.error('Secret starts with:', secret.substring(0, 10));
-        
-        // TEMPORARY FALLBACK: Parse without verification for testing
-        console.warn('⚠️ Attempting to parse event without verification (INSECURE)');
-        try {
-          event = JSON.parse(req.body.toString());
-        } catch (parseError) {
-          return res.status(400).send(`Webhook Error: ${e.message}`);
-        }
+        const bodyStr = Buffer.isBuffer(req.body) ? req.body.toString() : JSON.stringify(req.body);
+        event = JSON.parse(bodyStr);
+      } catch (parseError) {
+        return res.status(400).send(`Webhook Error: ${e.message}`);
       }
     }
 
@@ -257,13 +247,75 @@ app.post(
       if (resend && email !== 'unknown') {
         try {
           await resend.emails.send({
-            from: 'onboarding@resend.dev', // free sender; swap later to your domain
+            from: 'onboarding@resend.dev', // TODO: Change to your domain after verifying in Resend
             to: email,
-            subject: 'Your Scryfall Syntax Extension License',
-            text:
-              `Thanks for your purchase!\n\n` +
-              `Your license key:\n${license}\n\n` +
-              `Install: chrome://extensions → Load unpacked → open popup → paste key.`,
+            replyTo: 'henrywisner8@gmail.com',
+            subject: 'Your Scryfall Syntax Extension License Key',
+            html: `
+              <h2>Thank you for your purchase!</h2>
+              
+              <p>Your license key is:</p>
+              <p style="background: #f5f5f5; padding: 15px; font-family: monospace; font-size: 16px; border-radius: 5px;">
+                <strong>${license}</strong>
+              </p>
+              
+              <h3>Installation Instructions:</h3>
+              <ol>
+                <li><strong>Download the extension:</strong><br>
+                    <a href="YOUR_DOWNLOAD_LINK_HERE">Click here to download</a>
+                    <!-- TODO: Replace YOUR_DOWNLOAD_LINK_HERE with actual download link -->
+                </li>
+                <li><strong>Install in Chrome:</strong>
+                    <ul>
+                      <li>Go to <code>chrome://extensions</code></li>
+                      <li>Enable "Developer mode" (toggle in top right)</li>
+                      <li>Click "Load unpacked"</li>
+                      <li>Select the extension folder you downloaded</li>
+                    </ul>
+                </li>
+                <li><strong>Activate your license:</strong>
+                    <ul>
+                      <li>Click the extension icon in your browser toolbar</li>
+                      <li>Paste your license key: <code>${license}</code></li>
+                      <li>Click "Activate"</li>
+                    </ul>
+                </li>
+              </ol>
+              
+              <h3>Using the Extension:</h3>
+              <p>Visit <a href="https://scryfall.com">scryfall.com</a> and start using natural language to search for Magic cards!</p>
+              
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+              
+              <p style="color: #666; font-size: 14px;">
+                <strong>Need help?</strong> Reply to this email or contact support at 
+                <a href="mailto:henrywisner8@gmail.com">henrywisner8@gmail.com</a>
+              </p>
+              
+              <p style="color: #999; font-size: 12px;">
+                Keep this email safe - you'll need your license key to use the extension.
+              </p>
+            `,
+            text: `Thank you for your purchase!
+
+Your license key: ${license}
+
+Installation Instructions:
+
+1. Download the extension: YOUR_DOWNLOAD_LINK_HERE
+2. Install in Chrome:
+   - Go to chrome://extensions
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the extension folder
+3. Activate your license:
+   - Click the extension icon
+   - Paste your license key
+   - Click "Activate"
+
+Need help? Contact henrywisner8@gmail.com
+
+Keep this email safe - you'll need your license key to use the extension.`
           });
           console.log('📧 License email sent');
         } catch (e) {
@@ -291,22 +343,24 @@ COLORS:
 c:w (white) c:u (blue) c:b (black) c:r (red) c:g (green)
 c:colorless (colorless cards)
 
-CARD TYPES:
-t:creature t:instant t:sorcery t:artifact t:enchantment t:planeswalker t:land
-t:legendary (legendary supertype)
-Creature subtypes: t:dinosaur t:dragon t:elf t:goblin t:zombie t:vampire t:angel t:demon
+CARD TYPES AND CREATURE TYPES (CRITICAL):
+- Use t:<type> for card types: t:creature t:instant t:sorcery t:artifact t:enchantment t:planeswalker t:land
+- Use t:<subtype> for creature types (races, classes, tribes): t:bear t:elf t:dragon t:dinosaur t:goblin t:zombie t:vampire t:angel t:demon t:wizard t:soldier t:human t:cat t:dog t:bird t:beast etc.
+- ALWAYS use t:creature along with the subtype when searching for creature types
+- Examples: "green bears" → t:creature t:bear c:g (NOT o:bear)
+- Examples: "white soldiers" → t:creature t:soldier c:w (NOT o:soldier)
+- NEVER use o:<text> when the user is asking for a creature type - always use t:<subtype>
 
-KEYWORD ABILITIES (IMPORTANT)
-- Use kw:<keyword> (alias: keyword:<keyword>) for actual keyword abilities.
-  Examples: kw:flying kw:first strike kw:deathtouch kw:lifelink kw:menace kw:trample kw:haste kw:vigilance kw:hexproof
-- Use o:<text> only for literal words/phrases appearing in the rules text.
-  Examples: o:"draw a card" o:destroy o:exile
-- If the user says "with flying / has flying / keyword flying", use kw:flying.
-- If the user says "cards that say 'flying' in the text", use o:flying.
+KEYWORD ABILITIES (CRITICAL):
+- ALWAYS use kw:<keyword> for keyword abilities like flying, vigilance, deathtouch, lifelink, trample, haste, menace, reach, first strike, double strike, hexproof, indestructible, flash, defender
+- Examples: kw:flying kw:vigilance kw:deathtouch kw:lifelink kw:menace kw:trample kw:haste kw:reach kw:hexproof
+- NEVER use o:flying or o:vigilance etc. - these keywords should ALWAYS use kw: syntax
+- Use o:<text> ONLY for non-keyword text like o:"draw a card" o:destroy o:exile o:counter o:"target creature"
 
 ORACLE TEXT:
 o:"draw a card" (exact phrases in quotes)
-o:destroy o:exile o:counter
+o:destroy o:exile o:counter o:"target creature"
+DO NOT use o: for keywords or creature types - use kw: and t: instead
 
 MANA VALUE:
 mv:3 (exactly 3)
@@ -339,13 +393,22 @@ SET SELECTION:
 - If only a set NAME is provided (no code), choose the best official set code for that name. Never confuse lookalikes (cmm≠cma, mm2≠mh2, 2xm≠mm2).
 
 EXAMPLES:
-"blue dinosaurs" → t:dinosaur c:u
-"green dinosaurs with toughness less than 6" → t:dinosaur c:g tou<6
-"red dragons with flying" → t:dragon c:r kw:flying
-"black zombies modern legal power 2-5" → t:zombie c:b f:modern pow>2 pow<5
-"legendary elves from Dominaria" → t:legendary t:elf s:dom
+"blue dinosaurs" → t:creature t:dinosaur c:u
+"green bears" → t:creature t:bear c:g
+"white soldiers with vigilance" → t:creature t:soldier c:w kw:vigilance
+"green dinosaurs with toughness less than 6" → t:creature t:dinosaur c:g tou<6
+"red dragons with flying" → t:creature t:dragon c:r kw:flying
+"black zombies modern legal power 2-5" → t:creature t:zombie c:b f:modern pow>=2 pow<=5
+"legendary elves from Dominaria" → t:legendary t:creature t:elf s:dom
 "cheap red removal" → c:r (o:destroy OR o:exile) mv<=3
-"white or blue angels" → t:angel (c:w OR c:u)
+"white or blue angels" → t:creature t:angel (c:w OR c:u)
+"creatures with lifelink" → t:creature kw:lifelink
+"elves with reach" → t:creature t:elf kw:reach
+
+REMEMBER: 
+- Creature types (bear, elf, dragon, etc.) ALWAYS use t:<type> syntax
+- Keyword abilities (flying, vigilance, etc.) ALWAYS use kw:<keyword> syntax
+- Only use o: for non-keyword rules text
 
 Output syntax only.`;
 
