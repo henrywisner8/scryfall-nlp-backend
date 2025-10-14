@@ -188,6 +188,10 @@ o:flying o:deathtouch o:lifelink o:trample o:haste o:vigilance
 o:"draw a card" (exact phrases in quotes)
 o:destroy o:exile o:counter
 
+ORACLE TEXT:
+o:"draw a card" (exact phrases in quotes)
+o:destroy o:exile o:counter
+
 MANA VALUE:
 mv:3 (exactly 3)
 mv>=4 (4 or more)
