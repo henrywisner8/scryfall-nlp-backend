@@ -2,13 +2,15 @@
   "manifest_version": 3,
   "name": "Scryfall Natural Language Search",
   "version": "1.0.0",
-  "description": "Search Magic cards on Scryfall using plain English",
-  "permissions": [
-    "storage"
-  ],
+  "description": "Search Magic cards on Scryfall using plain English.",
+  "action": {
+    "default_title": "Scryfall NLP",
+    "default_popup": "popup.html"
+  },
+  "permissions": ["storage"],
   "host_permissions": [
-    "https://api.openai.com/*",
-    "https://scryfall.com/*"
+    "https://scryfall.com/*",
+    "https://scryfall-nlp-backend-production.up.railway.app/*"
   ],
   "content_scripts": [
     {
@@ -18,7 +20,7 @@
       "run_at": "document_end"
     }
   ],
-  "action": {
-    "default_popup": "popup.html"
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://scryfall-nlp-backend-production.up.railway.app https://api.openai.com https://api.anthropic.com;"
   }
 }
