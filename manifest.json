@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Scryfall Natural Language Search",
+  "version": "1.0.0",
+  "description": "Search Magic cards on Scryfall using plain English",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://scryfall.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://scryfall.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
