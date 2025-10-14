@@ -1,4 +1,4 @@
-// server.js — Scryfall NLP API (licenses + per-license rate limit + set resolver)
+// server.js — Scryfall NLP API (licenses + per-license rate limit + set resolver + PERSISTENCE)
 
 require('dotenv').config();
 
@@ -8,6 +8,44 @@ const bodyParser = require('body-parser');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
 const { Resend } = require('resend');
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const fs = require('fs');
+const path = require('path');
+
+// ---------- license persistence ----------
+const LICENSE_FILE = path.join(__dirname, 'licenses.json');
+
+function loadLicenses() {
+  try {
+    if (fs.existsSync(LICENSE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf8'));
+      data.licenses?.forEach(l => VALID_LICENSES.add(l));
+      if (data.emails) {
+        Object.entries(data.emails).forEach(([email, license]) => {
+          EMAIL_TO_LICENSE.set(email, license);
+        });
+      }
+      console.log(`📂 Loaded ${VALID_LICENSES.size} licenses from disk`);
+    } else {
+      console.log('📂 No existing license file found, starting fresh');
+    }
+  } catch (error) {
+    console.error('⚠️  Error loading licenses:', error.message);
+  }
+}
+
+function saveLicenses() {
+  try {
+    const data = {
+      licenses: [...VALID_LICENSES],
+      emails: Object.fromEntries(EMAIL_TO_LICENSE),
+      lastUpdated: new Date().toISOString()
+    };
+    fs.writeFileSync(LICENSE_FILE, JSON.stringify(data, null, 2));
+    console.log(`💾 Saved ${VALID_LICENSES.size} licenses to disk`);
+  } catch (error) {
+    console.error('⚠️  Error saving licenses:', error.message);
+  }
+}
 
 // ---------- utils ----------
 function generateLicense() {
@@ -145,6 +183,9 @@ app.use(express.json()); // (webhook uses raw below)
 const VALID_LICENSES = new Set(['TEST-1234-5678-ABCD', 'TEST-9999-8888-XXXX']);
 const EMAIL_TO_LICENSE = new Map(); // email -> latest license
 
+// Load existing licenses on startup
+loadLicenses();
+
 function requireLicense(req, res, next) {
   const key = req.body?.licenseKey;
   if (!key) {
@@ -169,6 +210,7 @@ app.post(
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, secret);
     } catch (e) {
+      console.error('❌ Webhook signature verification failed:', e.message);
       return res.status(400).send(`Webhook Error: ${e.message}`);
     }
 
@@ -177,6 +219,9 @@ app.post(
       const license = generateLicense();
       VALID_LICENSES.add(license);
       if (email !== 'unknown') EMAIL_TO_LICENSE.set(email, license);
+
+      // Save to disk immediately
+      saveLicenses();
 
       console.log(`✅ Activated ${license} for ${email}`);
 
@@ -225,8 +270,8 @@ KEYWORD ABILITIES (IMPORTANT)
   Examples: kw:flying kw:first strike kw:deathtouch kw:lifelink kw:menace kw:trample kw:haste kw:vigilance kw:hexproof
 - Use o:<text> only for literal words/phrases appearing in the rules text.
   Examples: o:"draw a card" o:destroy o:exile
-- If the user says “with flying / has flying / keyword flying”, use kw:flying.
-- If the user says “cards that say ‘flying’ in the text”, use o:flying.
+- If the user says "with flying / has flying / keyword flying", use kw:flying.
+- If the user says "cards that say 'flying' in the text", use o:flying.
 
 ORACLE TEXT:
 o:"draw a card" (exact phrases in quotes)
@@ -431,6 +476,7 @@ const server = app.listen(PORT, () => {
 ['SIGINT', 'SIGTERM'].forEach((sig) => {
   process.on(sig, () => {
     console.log(`Received ${sig}, shutting down...`);
+    saveLicenses(); // Save one last time before shutdown
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000);
   });
