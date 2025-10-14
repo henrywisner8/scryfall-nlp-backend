@@ -1,6 +1,52 @@
 // Production backend with license key validation
 const express = require('express');
 const cors = require('cors');
+
+// ---- Rate limiting (per license) ----
+const WINDOW_MS = 60 * 60 * 1000;   // 1 hour
+const MAX_REQUESTS = 60;            // per license per window
+const usage = new Map();            // licenseKey -> { count, resetAt }
+
+function setRateHeaders(res, remaining, resetAt) {
+  // IETF draft headers: https://www.rfc-editor.org/rfc/rfc-x (common pattern)
+  res.setHeader('RateLimit-Limit', String(MAX_REQUESTS));
+  res.setHeader('RateLimit-Remaining', String(Math.max(0, remaining)));
+  res.setHeader('RateLimit-Reset', String(Math.max(0, Math.ceil((resetAt - Date.now()) / 1000))));
+}
+
+function rateLimitPerLicense(req, res, next) {
+  // only apply to licensed endpoints
+  const key = req.body?.licenseKey;
+  if (!key) return res.status(401).json({ error: 'License key required' });
+
+  let rec = usage.get(key);
+  const now = Date.now();
+
+  if (!rec || now >= rec.resetAt) {
+    rec = { count: 0, resetAt: now + WINDOW_MS };
+  }
+
+  if (rec.count >= MAX_REQUESTS) {
+    setRateHeaders(res, 0, rec.resetAt);
+    return res.status(429).json({
+      error: 'Rate limit exceeded. Try again later.',
+      limit: MAX_REQUESTS,
+      resetSeconds: Math.ceil((rec.resetAt - now) / 1000)
+    });
+  }
+
+  rec.count += 1;
+  usage.set(key, rec);
+
+  setRateHeaders(res, MAX_REQUESTS - rec.count, rec.resetAt);
+  next();
+}
+
+// (optional) periodic cleanup to prevent unbounded growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of usage) if (now > v.resetAt + WINDOW_MS) usage.delete(k);
+}, 30 * 60 * 1000);
 require('dotenv').config();
 
 const app = express();
@@ -74,7 +120,8 @@ EXAMPLES:
 Output syntax only.`;
 
 // POST /api/convert - Main conversion endpoint
-app.post('/api/convert', async (req, res) => {
+app.post('/api/convert', rateLimitPerLicense, async (req, res) => {
+
   const { query, licenseKey, provider } = req.body;
   
   if (!query) {
