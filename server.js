@@ -178,7 +178,6 @@ async function getSetCandidatesFromQuery(query, k = 6) {
 // ---------- app & storage ----------
 const app = express();
 app.use(cors());
-app.use(express.json()); // (webhook uses raw below)
 
 const VALID_LICENSES = new Set(['TEST-1234-5678-ABCD', 'TEST-9999-8888-XXXX']);
 const EMAIL_TO_LICENSE = new Map(); // email -> latest license
@@ -199,10 +198,10 @@ function requireLicense(req, res, next) {
   next();
 }
 
-// ---------- Stripe webhook (MUST be before express.json for this route) ----------
+// ---------- Stripe webhook (MUST be BEFORE express.json) ----------
 app.post(
   '/stripe/webhook',
-  bodyParser.raw({ type: 'application/json' }),
+  express.raw({ type: 'application/json' }),
   async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -247,6 +246,9 @@ app.post(
     res.json({ received: true });
   }
 );
+
+// Now add express.json for all other routes
+app.use(express.json());
 
 // ---------- system prompt ----------
 const SYSTEM_PROMPT = `You are a Scryfall search syntax converter. Convert natural language to valid Scryfall syntax.
