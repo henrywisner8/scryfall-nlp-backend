@@ -1,6 +1,4 @@
-// popup.js - License management and settings
-
-const BACKEND_URL = 'scryfall-nlp-backend-production.up.railway.app'; // Change to your Railway URL in production
+const BACKEND_URL = 'https://scryfall-nlp-backend-production.up.railway.app';
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -12,18 +10,13 @@ async function init() {
 function attachEventListeners() {
   document.getElementById('activateBtn').addEventListener('click', activateLicense);
   document.getElementById('deactivateBtn').addEventListener('click', deactivateLicense);
-  
   document.getElementById('licenseInput').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      activateLicense();
-    }
+    if (e.key === 'Enter') activateLicense();
   });
-  
   document.getElementById('helpLink').addEventListener('click', (e) => {
     e.preventDefault();
     showHelp();
   });
-  
   document.getElementById('supportLink').addEventListener('click', (e) => {
     e.preventDefault();
     chrome.tabs.create({ url: 'mailto:support@yoursite.com' });
@@ -32,18 +25,14 @@ function attachEventListeners() {
 
 async function checkLicenseStatus() {
   const { licenseKey, searchCount } = await chrome.storage.sync.get(['licenseKey', 'searchCount']);
-  
   if (licenseKey) {
-    // Validate license with backend
     try {
       const response = await fetch(`${BACKEND_URL}/api/validate-license`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ licenseKey })
       });
-      
       const data = await response.json();
-      
       if (data.valid) {
         showActivatedView(licenseKey, searchCount || 0);
       } else {
@@ -52,7 +41,7 @@ async function checkLicenseStatus() {
       }
     } catch (error) {
       console.error('License validation error:', error);
-      showActivatedView(licenseKey, searchCount || 0); // Allow offline usage
+      showActivatedView(licenseKey, searchCount || 0);
     }
   } else {
     showNotActivatedView();
@@ -62,48 +51,37 @@ async function checkLicenseStatus() {
 function showActivatedView(licenseKey, searchCount) {
   document.getElementById('notActivatedView').classList.add('hidden');
   document.getElementById('activatedView').classList.remove('hidden');
-  
   document.getElementById('searchCount').textContent = searchCount;
-  document.getElementById('licenseDisplay').textContent = 
-    licenseKey.substring(0, 13) + '...';
+  document.getElementById('licenseDisplay').textContent = licenseKey.substring(0, 13) + '...';
 }
 
 function showNotActivatedView(message = null) {
   document.getElementById('activatedView').classList.add('hidden');
   document.getElementById('notActivatedView').classList.remove('hidden');
-  
-  if (message) {
-    showAlert(message, 'error');
-  }
+  if (message) showAlert(message, 'error');
 }
 
 async function activateLicense() {
   const licenseInput = document.getElementById('licenseInput');
   const activateBtn = document.getElementById('activateBtn');
   const licenseKey = licenseInput.value.trim().toUpperCase();
-  
   if (!licenseKey) {
     showAlert('Please enter a license key', 'error');
     return;
   }
-  
   if (!licenseKey.startsWith('SCRY-') && !licenseKey.startsWith('TEST-')) {
     showAlert('Invalid license key format', 'error');
     return;
   }
-  
   activateBtn.textContent = 'Validating...';
   activateBtn.disabled = true;
-  
   try {
     const response = await fetch(`${BACKEND_URL}/api/validate-license`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ licenseKey })
     });
-    
     const data = await response.json();
-    
     if (data.valid) {
       await chrome.storage.sync.set({ licenseKey, searchCount: 0 });
       showAlert('✓ License activated successfully!', 'success');
@@ -134,7 +112,6 @@ function showAlert(message, type) {
   alertBox.textContent = message;
   alertBox.className = `alert alert-${type}`;
   alertBox.classList.remove('hidden');
-  
   if (type === 'success') {
     setTimeout(() => {
       alertBox.classList.add('hidden');
@@ -167,6 +144,5 @@ License:
 • Lifetime access
 
 Support: support@yoursite.com`;
-  
   alert(helpText);
 }
