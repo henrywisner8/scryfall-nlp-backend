@@ -1,20 +1,37 @@
 // server.js — Scryfall NLP API (licenses + per-license rate limit + set resolver)
+
 require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
+const { Resend } = require('resend');
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-// ------------------------------
-// Rate limiting (per-license)
-// ------------------------------
-const WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60 * 60 * 1000); // default 1h
-const MAX_REQUESTS = Number(process.env.RATE_MAX_REQUESTS ?? 60);      // default 60/h
+// ---------- utils ----------
+function generateLicense() {
+  const chunk = () =>
+    Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  return `SCRY-${chunk()}-${chunk()}-${chunk()}`;
+}
+
+function norm(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// ---------- rate limit (per license) ----------
+const WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60 * 60 * 1000); // 1h
+const MAX_REQUESTS = Number(process.env.RATE_MAX_REQUESTS ?? 60);      // 60/h
 const usage = new Map(); // licenseKey -> { count, resetAt }
 
 function setRateHeaders(res, remaining, resetAt) {
   res.setHeader('RateLimit-Limit', String(MAX_REQUESTS));
   res.setHeader('RateLimit-Remaining', String(Math.max(0, remaining)));
-  res.setHeader('RateLimit-Reset', String(Math.max(0, Math.ceil((resetAt - Date.now()) / 1000))));
+  res.setHeader(
+    'RateLimit-Reset',
+    String(Math.max(0, Math.ceil((resetAt - Date.now()) / 1000)))
+  );
 }
 
 function rateLimitPerLicense(req, res, next) {
@@ -23,44 +40,33 @@ function rateLimitPerLicense(req, res, next) {
     setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
     return res.status(401).json({ error: 'License key required' });
   }
-
-  let rec = usage.get(key);
   const now = Date.now();
-
-  if (!rec || now >= rec.resetAt) {
-    rec = { count: 0, resetAt: now + WINDOW_MS };
-  }
+  let rec = usage.get(key);
+  if (!rec || now >= rec.resetAt) rec = { count: 0, resetAt: now + WINDOW_MS };
 
   if (rec.count >= MAX_REQUESTS) {
     setRateHeaders(res, 0, rec.resetAt);
     return res.status(429).json({
       error: 'Rate limit exceeded. Try again later.',
       limit: MAX_REQUESTS,
-      resetSeconds: Math.ceil((rec.resetAt - now) / 1000)
+      resetSeconds: Math.ceil((rec.resetAt - now) / 1000),
     });
   }
-
   rec.count += 1;
   usage.set(key, rec);
   setRateHeaders(res, MAX_REQUESTS - rec.count, rec.resetAt);
   next();
 }
 
-// periodic cleanup for memory hygiene
+// periodic cleanup
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of usage) if (now > v.resetAt + WINDOW_MS) usage.delete(k);
 }, 30 * 60 * 1000);
 
-// ------------------------------
-// Scryfall set resolver (cached)
-// ------------------------------
+// ---------- sets resolver (cached) ----------
 const SETS_CACHE = { data: null, fetchedAt: 0 };
 const SETS_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-
-function norm(s) {
-  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
 
 async function fetchAllSets() {
   const now = Date.now();
@@ -70,14 +76,13 @@ async function fetchAllSets() {
   if (!resp.ok) throw new Error('Failed to load Scryfall sets');
   const json = await resp.json();
 
-  const sets = json.data.map(s => ({
+  const sets = json.data.map((s) => ({
     code: (s.code || '').toLowerCase(),
     name: s.name || '',
     nameNorm: norm(s.name || ''),
-    releasedAt: s.released_at || '0000-00-00'
+    releasedAt: s.released_at || '0000-00-00',
   }));
 
-  // Common aliases / nicknames (extend as needed)
   const aliases = [
     { code: 'cmm', name: 'commander masters' },
     { code: 'cma', name: 'commander anthology' },
@@ -85,7 +90,7 @@ async function fetchAllSets() {
     { code: 'mh2', name: 'modern horizons 2' },
     { code: '2xm', name: 'double masters' },
     { code: 'dom', name: 'dominaria' },
-    { code: 'dmu', name: 'dominaria united' }
+    { code: 'dmu', name: 'dominaria united' },
   ];
   for (const a of aliases) {
     sets.push({ code: a.code, name: a.name, nameNorm: norm(a.name), releasedAt: '9999-99-99' });
@@ -97,62 +102,48 @@ async function fetchAllSets() {
 }
 
 function scoreMatch(q, nameNorm) {
-  if (q.includes(nameNorm)) return 100; // strong
+  if (q.includes(nameNorm)) return 100;
   const qw = new Set(q.split(/\s+/));
   const nw = new Set(nameNorm.split(/\s+/));
   let overlap = 0;
   for (const w of nw) if (qw.has(w)) overlap++;
-  return overlap; // small positive
+  return overlap;
 }
 
 async function getSetCandidatesFromQuery(query, k = 6) {
   const sets = await fetchAllSets();
   const q = norm(query);
   if (!q) return [];
-
   const qTight = q
     .replace(/\b(the|set|edition|masters|anthology|collection|series)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-
   const scored = [];
   for (const s of sets) {
     const sTight = s.nameNorm
       .replace(/\b(the|set|edition|masters|anthology|collection|series)\b/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-
-    const base = scoreMatch(q, s.nameNorm);
-    const bonus = scoreMatch(qTight, sTight);
-    const score = Math.max(base, bonus);
+    const score = Math.max(scoreMatch(q, s.nameNorm), scoreMatch(qTight, sTight));
     if (score >= 1) scored.push({ ...s, score });
   }
-
   const bestByCode = new Map();
   for (const s of scored) {
     const prev = bestByCode.get(s.code);
     if (!prev || s.score > prev.score) bestByCode.set(s.code, s);
   }
-
-  const candidates = [...bestByCode.values()].sort(
-    (a, b) => b.score - a.score || b.releasedAt.localeCompare(a.releasedAt)
-  );
-
-  return candidates.slice(0, k);
+  return [...bestByCode.values()]
+    .sort((a, b) => b.score - a.score || b.releasedAt.localeCompare(a.releasedAt))
+    .slice(0, k);
 }
 
-// ------------------------------
-// App & config
-// ------------------------------
+// ---------- app & storage ----------
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // (webhook uses raw below)
 
-// Simple in-memory license storage (MVP). Replace with DB for production.
-const VALID_LICENSES = new Set([
-  'TEST-1234-5678-ABCD',
-  'TEST-9999-8888-XXXX'
-]);
+const VALID_LICENSES = new Set(['TEST-1234-5678-ABCD', 'TEST-9999-8888-XXXX']);
+const EMAIL_TO_LICENSE = new Map(); // email -> latest license
 
 function requireLicense(req, res, next) {
   const key = req.body?.licenseKey;
@@ -167,6 +158,52 @@ function requireLicense(req, res, next) {
   next();
 }
 
+// ---------- Stripe webhook (MUST be before express.json for this route) ----------
+app.post(
+  '/stripe/webhook',
+  bodyParser.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, secret);
+    } catch (e) {
+      return res.status(400).send(`Webhook Error: ${e.message}`);
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const email = event.data.object.customer_details?.email?.toLowerCase() || 'unknown';
+      const license = generateLicense();
+      VALID_LICENSES.add(license);
+      if (email !== 'unknown') EMAIL_TO_LICENSE.set(email, license);
+
+      console.log(`✅ Activated ${license} for ${email}`);
+
+      // OPTIONAL email: only if RESEND_API_KEY is set
+      if (resend && email !== 'unknown') {
+        try {
+          await resend.emails.send({
+            from: 'onboarding@resend.dev', // free sender; swap later to your domain
+            to: email,
+            subject: 'Your Scryfall Syntax Extension License',
+            text:
+              `Thanks for your purchase!\n\n` +
+              `Your license key:\n${license}\n\n` +
+              `Install: chrome://extensions → Load unpacked → open popup → paste key.`,
+          });
+          console.log('📧 License email sent');
+        } catch (e) {
+          console.error('Email send failed:', e.message);
+        }
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
+
+// ---------- system prompt ----------
 const SYSTEM_PROMPT = `You are a Scryfall search syntax converter. Convert natural language to valid Scryfall syntax.
 
 OUTPUT RULES:
@@ -190,7 +227,6 @@ KEYWORD ABILITIES (IMPORTANT)
   Examples: o:"draw a card" o:destroy o:exile
 - If the user says “with flying / has flying / keyword flying”, use kw:flying.
 - If the user says “cards that say ‘flying’ in the text”, use o:flying.
-
 
 ORACLE TEXT:
 o:"draw a card" (exact phrases in quotes)
@@ -229,7 +265,7 @@ SET SELECTION:
 EXAMPLES:
 "blue dinosaurs" → t:dinosaur c:u
 "green dinosaurs with toughness less than 6" → t:dinosaur c:g tou<6
-"red dragons with flying" → t:dragon c:r o:flying
+"red dragons with flying" → t:dragon c:r kw:flying
 "black zombies modern legal power 2-5" → t:zombie c:b f:modern pow>2 pow<5
 "legendary elves from Dominaria" → t:legendary t:elf s:dom
 "cheap red removal" → c:r (o:destroy OR o:exile) mv<=3
@@ -237,16 +273,11 @@ EXAMPLES:
 
 Output syntax only.`;
 
-// ------------------------------
-// Routes
-// ------------------------------
-
-// Convert (license → rate-limit → resolve sets → call LLM)
+// ---------- routes ----------
 app.post('/api/convert', requireLicense, rateLimitPerLicense, async (req, res) => {
   const { query, provider } = req.body;
   if (!query) return res.status(400).json({ error: 'Query is required' });
 
-  // Try to capture an explicit code like "(CMM)" or "set: CMM"
   const explicitMatch =
     query.match(/\(\s*([A-Za-z0-9]{2,5})\s*\)/) ||
     query.match(/\b(?:set|code)\s*[:=]?\s*([A-Za-z0-9]{2,5})\b/i);
@@ -276,7 +307,7 @@ Rules:
       dynamicSystem += `
 
 CANDIDATE SETS (CHOOSE ONLY FROM THESE IF A SET IS IMPLIED)
-${candidates.map(c => `- s:${c.code} — ${c.name}`).join('\n')}
+${candidates.map((c) => `- s:${c.code} — ${c.name}`).join('\n')}
 
 Rules:
 - If a set is requested by name, choose the best match from the list above.
@@ -296,15 +327,15 @@ Rules:
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01'
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model: 'claude-3-5-haiku-20241022',
           max_tokens: 200,
-          system: dynamicSystem, // use dynamic system!
+          system: dynamicSystem,
           messages: [{ role: 'user', content: query }],
-          temperature: 0.1
-        })
+          temperature: 0.1,
+        }),
       });
 
       if (!response.ok) {
@@ -321,17 +352,17 @@ Rules:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: dynamicSystem }, // use dynamic system!
-            { role: 'user', content: query }
+            { role: 'system', content: dynamicSystem },
+            { role: 'user', content: query },
           ],
           temperature: 0.1,
-          max_tokens: 200
-        })
+          max_tokens: 200,
+        }),
       });
 
       if (!response.ok) {
@@ -353,57 +384,51 @@ Rules:
   }
 });
 
-// Validate license
+// license validation
 app.post('/api/validate-license', (req, res) => {
   const { licenseKey } = req.body || {};
   if (!licenseKey) {
     setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
     return res.status(400).json({ valid: false, error: 'License key required' });
   }
-  const isValid = VALID_LICENSES.has(licenseKey);
-  return res.json({ valid: isValid });
+  return res.json({ valid: VALID_LICENSES.has(licenseKey) });
 });
 
-// Activate license (placeholder for Stripe webhook)
-app.post('/api/activate-license', (req, res) => {
-  const { licenseKey } = req.body || {};
-  if (licenseKey && licenseKey.startsWith('SCRY-')) {
-    VALID_LICENSES.add(licenseKey);
-    console.log(`✓ Activated license: ${licenseKey}`);
-    return res.json({ success: true });
+// success-page helper: get license via Stripe session_id
+app.get('/api/license/by-session', async (req, res) => {
+  try {
+    const sid = req.query.session_id;
+    if (!sid) return res.status(400).json({ error: 'session_id required' });
+    const session = await stripe.checkout.sessions.retrieve(sid);
+    const email = session.customer_details?.email?.toLowerCase();
+    if (!email) return res.status(404).json({ error: 'email not found' });
+    const license = EMAIL_TO_LICENSE.get(email);
+    return license ? res.json({ license }) : res.status(404).json({ error: 'license not found' });
+  } catch (e) {
+    return res.status(500).json({ error: 'lookup failed' });
   }
-  return res.status(400).json({ error: 'Invalid license format' });
 });
 
-// Health & root
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    licenses: VALID_LICENSES.size
-  });
-});
+// health & root
+app.get('/health', (_req, res) =>
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), licenses: VALID_LICENSES.size })
+);
+app.get('/', (_req, res) =>
+  res.json({ name: 'Scryfall NLP API', version: '2.0.0', status: 'operational' })
+);
 
-app.get('/', (req, res) => {
-  res.json({
-    name: 'Scryfall NLP API',
-    version: '2.0.0',
-    status: 'operational'
-  });
-});
-
-// ------------------------------
-// Start (with graceful shutdown)
-// ------------------------------
+// start
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
   console.log('✨ Scryfall NLP API v2.0');
   console.log(`📡 Port: ${PORT}`);
   console.log(`🔑 Active licenses: ${VALID_LICENSES.size}`);
-  console.log(`🤖 Provider: ${process.env.OPENAI_API_KEY ? 'OpenAI' : process.env.ANTHROPIC_API_KEY ? 'Anthropic' : 'NONE'}`);
+  console.log(
+    `🤖 Provider: ${process.env.OPENAI_API_KEY ? 'OpenAI' : process.env.ANTHROPIC_API_KEY ? 'Anthropic' : 'NONE'}`
+  );
 });
 
-['SIGINT', 'SIGTERM'].forEach(sig => {
+['SIGINT', 'SIGTERM'].forEach((sig) => {
   process.on(sig, () => {
     console.log(`Received ${sig}, shutting down...`);
     server.close(() => process.exit(0));
