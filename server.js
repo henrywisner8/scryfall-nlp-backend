@@ -628,7 +628,6 @@ const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
   console.log('✨ Scryfall NLP API v2.0');
   console.log(`📡 Port: ${PORT}`);
-  console.log(`🔑 Active licenses: ${VALID_LICENSES.size}`);
   console.log(
     `🤖 Provider: ${process.env.OPENAI_API_KEY ? 'OpenAI' : process.env.ANTHROPIC_API_KEY ? 'Anthropic' : 'NONE'}`
   );
