@@ -4,46 +4,100 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
 const { Resend } = require('resend');
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-// ---------- license persistence ----------
-const LICENSE_FILE = path.join(__dirname, 'licenses.json');
+// ---------- database connection ----------
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-function loadLicenses() {
+// Initialize database table
+async function initDatabase() {
+  const client = await pool.connect();
   try {
-    if (fs.existsSync(LICENSE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(LICENSE_FILE, 'utf8'));
-      data.licenses?.forEach(l => VALID_LICENSES.add(l));
-      if (data.emails) {
-        Object.entries(data.emails).forEach(([email, license]) => {
-          EMAIL_TO_LICENSE.set(email, license);
-        });
-      }
-      console.log(`📂 Loaded ${VALID_LICENSES.size} licenses from disk`);
-    } else {
-      console.log('📂 No existing license file found, starting fresh');
-    }
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS licenses (
+        license_key VARCHAR(255) PRIMARY KEY,
+        email VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true
+      )
+    `);
+    
+    // Add test licenses if they don't exist
+    await client.query(`
+      INSERT INTO licenses (license_key, email, is_active) 
+      VALUES ('TEST-1234-5678-ABCD', 'test@example.com', true)
+      ON CONFLICT (license_key) DO NOTHING
+    `);
+    await client.query(`
+      INSERT INTO licenses (license_key, email, is_active) 
+      VALUES ('TEST-9999-8888-XXXX', 'test@example.com', true)
+      ON CONFLICT (license_key) DO NOTHING
+    `);
+    
+    const result = await client.query('SELECT COUNT(*) FROM licenses WHERE is_active = true');
+    console.log(`📂 Database initialized. Active licenses: ${result.rows[0].count}`);
   } catch (error) {
-    console.error('⚠️  Error loading licenses:', error.message);
+    console.error('❌ Database initialization error:', error.message);
+  } finally {
+    client.release();
   }
 }
 
-function saveLicenses() {
+// Check if license is valid
+async function isLicenseValid(licenseKey) {
+  const client = await pool.connect();
   try {
-    const data = {
-      licenses: [...VALID_LICENSES],
-      emails: Object.fromEntries(EMAIL_TO_LICENSE),
-      lastUpdated: new Date().toISOString()
-    };
-    fs.writeFileSync(LICENSE_FILE, JSON.stringify(data, null, 2));
-    console.log(`💾 Saved ${VALID_LICENSES.size} licenses to disk`);
+    const result = await client.query(
+      'SELECT * FROM licenses WHERE license_key = $1 AND is_active = true',
+      [licenseKey]
+    );
+    return result.rows.length > 0;
   } catch (error) {
-    console.error('⚠️  Error saving licenses:', error.message);
+    console.error('License validation error:', error);
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+// Add new license
+async function addLicense(licenseKey, email) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'INSERT INTO licenses (license_key, email, is_active) VALUES ($1, $2, true)',
+      [licenseKey, email]
+    );
+    console.log(`💾 License saved to database: ${licenseKey}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving license:', error);
+    return false;
+  } finally {
+    client.release();
+  }
+}
+
+// Get license by email (for session lookup)
+async function getLicenseByEmail(email) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT license_key FROM licenses WHERE email = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1',
+      [email]
+    );
+    return result.rows.length > 0 ? result.rows[0].license_key : null;
+  } catch (error) {
+    console.error('Error getting license by email:', error);
+    return null;
+  } finally {
+    client.release();
   }
 }
 
@@ -179,14 +233,8 @@ async function getSetCandidatesFromQuery(query, k = 6) {
 const app = express();
 app.use(cors());
 
-// Webhook route MUST be defined BEFORE any body parsing middleware
-// We'll add it right after creating the app
-
-const VALID_LICENSES = new Set(['TEST-1234-5678-ABCD', 'TEST-9999-8888-XXXX']);
-const EMAIL_TO_LICENSE = new Map(); // email -> latest license
-
-// Load existing licenses on startup
-loadLicenses();
+// Initialize database on startup
+initDatabase().catch(console.error);
 
 function requireLicense(req, res, next) {
   const key = req.body?.licenseKey;
@@ -194,11 +242,18 @@ function requireLicense(req, res, next) {
     setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
     return res.status(401).json({ error: 'License key required' });
   }
-  if (!VALID_LICENSES.has(key)) {
-    setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
-    return res.status(403).json({ error: 'Invalid license key' });
-  }
-  next();
+  
+  // Check license validity from database
+  isLicenseValid(key).then(valid => {
+    if (!valid) {
+      setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
+      return res.status(403).json({ error: 'Invalid license key' });
+    }
+    next();
+  }).catch(err => {
+    console.error('License check error:', err);
+    res.status(500).json({ error: 'License validation failed' });
+  });
 }
 
 // ---------- Stripe webhook (MUST be FIRST route, BEFORE any body parsers) ----------
@@ -235,11 +290,9 @@ app.post(
     if (event.type === 'checkout.session.completed') {
       const email = event.data.object.customer_details?.email?.toLowerCase() || 'unknown';
       const license = generateLicense();
-      VALID_LICENSES.add(license);
-      if (email !== 'unknown') EMAIL_TO_LICENSE.set(email, license);
-
-      // Save to disk immediately
-      saveLicenses();
+      
+      // Save to database
+      await addLicense(license, email);
 
       console.log(`✅ Activated ${license} for ${email}`);
 
@@ -524,13 +577,15 @@ Rules:
 });
 
 // license validation
-app.post('/api/validate-license', (req, res) => {
+app.post('/api/validate-license', async (req, res) => {
   const { licenseKey } = req.body || {};
   if (!licenseKey) {
     setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);
     return res.status(400).json({ valid: false, error: 'License key required' });
   }
-  return res.json({ valid: VALID_LICENSES.has(licenseKey) });
+  
+  const valid = await isLicenseValid(licenseKey);
+  return res.json({ valid });
 });
 
 // success-page helper: get license via Stripe session_id
@@ -541,7 +596,7 @@ app.get('/api/license/by-session', async (req, res) => {
     const session = await stripe.checkout.sessions.retrieve(sid);
     const email = session.customer_details?.email?.toLowerCase();
     if (!email) return res.status(404).json({ error: 'email not found' });
-    const license = EMAIL_TO_LICENSE.get(email);
+    const license = await getLicenseByEmail(email);
     return license ? res.json({ license }) : res.status(404).json({ error: 'license not found' });
   } catch (e) {
     return res.status(500).json({ error: 'lookup failed' });
@@ -549,9 +604,21 @@ app.get('/api/license/by-session', async (req, res) => {
 });
 
 // health & root
-app.get('/health', (_req, res) =>
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), licenses: VALID_LICENSES.size })
-);
+app.get('/health', async (_req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT COUNT(*) FROM licenses WHERE is_active = true');
+    client.release();
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(), 
+      licenses: parseInt(result.rows[0].count),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', error: error.message });
+  }
+});
 app.get('/', (_req, res) =>
   res.json({ name: 'Scryfall NLP API', version: '2.0.0', status: 'operational' })
 );
@@ -568,9 +635,9 @@ const server = app.listen(PORT, () => {
 });
 
 ['SIGINT', 'SIGTERM'].forEach((sig) => {
-  process.on(sig, () => {
+  process.on(sig, async () => {
     console.log(`Received ${sig}, shutting down...`);
-    saveLicenses(); // Save one last time before shutdown
+    await pool.end(); // Close database connections
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000);
   });
