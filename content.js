@@ -1,6 +1,8 @@
-// content.js – injects Natural Language UI and delegates network calls to background.js
+// content.js – injects Natural Language UI with freemium support
 (function () {
   'use strict';
+
+  const FREE_SEARCH_LIMIT = 5;
 
   function waitForSearchForm() {
     const searchForm = document.querySelector('form[action="/search"]');
@@ -20,7 +22,7 @@
     const toggleButton = document.createElement('button');
     toggleButton.id = 'nlp-toggle';
     toggleButton.type = 'button';
-    toggleButton.innerHTML = '✨ Natural Language';
+    toggleButton.innerHTML = '🔮 Natural Language';
     toggleButton.className = 'nlp-toggle-btn';
 
     const nlContainer = document.createElement('div');
@@ -45,6 +47,7 @@
             Cancel
           </button>
         </div>
+        <div id="nlp-usage" class="nlp-usage hidden"></div>
         <div id="nlp-result" class="nlp-result hidden"></div>
         <div id="nlp-error" class="nlp-error hidden"></div>
       </div>
@@ -54,10 +57,11 @@
     searchContainer.appendChild(toggleButton);
     searchContainer.appendChild(nlContainer);
 
-    toggleButton.addEventListener('click', () => {
+    toggleButton.addEventListener('click', async () => {
       nlContainer.classList.toggle('hidden');
       if (!nlContainer.classList.contains('hidden')) {
         document.getElementById('nlp-input').focus();
+        await updateUsageDisplay();
       }
     });
 
@@ -66,6 +70,7 @@
       document.getElementById('nlp-input').value = '';
       document.getElementById('nlp-result').classList.add('hidden');
       document.getElementById('nlp-error').classList.add('hidden');
+      document.getElementById('nlp-usage').classList.add('hidden');
     });
 
     document.getElementById('nlp-convert').addEventListener('click', handleConvert);
@@ -76,6 +81,36 @@
         handleConvert();
       }
     });
+  }
+
+  async function updateUsageDisplay() {
+    const { licenseKey, searchCount } = await chrome.storage.sync.get(['licenseKey', 'searchCount']);
+    const usageDiv = document.getElementById('nlp-usage');
+    const count = searchCount || 0;
+
+    if (licenseKey) {
+      // Has license - unlimited
+      usageDiv.innerHTML = `<span style="color: #22543d;">⭐ PRO: Unlimited searches</span>`;
+      usageDiv.classList.remove('hidden');
+    } else if (count >= FREE_SEARCH_LIMIT) {
+      // Limit reached
+      usageDiv.innerHTML = `<span style="color: #742a2a;">🔒 Free limit reached. <a href="#" id="nlp-upgrade-link" style="color: #667eea; text-decoration: underline;">Upgrade for unlimited</a></span>`;
+      usageDiv.classList.remove('hidden');
+      
+      // Add click handler for upgrade link
+      setTimeout(() => {
+        document.getElementById('nlp-upgrade-link')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          chrome.runtime.sendMessage({ type: 'openUpgrade' });
+        });
+      }, 100);
+    } else {
+      // Free searches remaining
+      const remaining = FREE_SEARCH_LIMIT - count;
+      const color = remaining <= 1 ? '#c53030' : '#2c5282';
+      usageDiv.innerHTML = `<span style="color: ${color};">🎁 Free trial: ${remaining} search${remaining !== 1 ? 'es' : ''} remaining</span>`;
+      usageDiv.classList.remove('hidden');
+    }
   }
 
   async function handleConvert() {
@@ -89,17 +124,36 @@
     resultDiv.classList.add('hidden');
     errorDiv.classList.add('hidden');
 
+    // Check usage limits
+    const { licenseKey, searchCount } = await chrome.storage.sync.get(['licenseKey', 'searchCount']);
+    const count = searchCount || 0;
+
+    if (!licenseKey && count >= FREE_SEARCH_LIMIT) {
+      errorDiv.innerHTML = `
+        You've used all 5 free searches! 🎉<br>
+        <a href="#" id="nlp-upgrade-error" style="color: #667eea; text-decoration: underline; font-weight: bold;">
+          Upgrade to unlimited for $4.99
+        </a>
+      `;
+      errorDiv.classList.remove('hidden');
+      
+      setTimeout(() => {
+        document.getElementById('nlp-upgrade-error')?.addEventListener('click', (e) => {
+          e.preventDefault();
+          chrome.runtime.sendMessage({ type: 'openUpgrade' });
+        });
+      }, 100);
+      return;
+    }
+
     convertBtn.textContent = 'Converting...';
     convertBtn.disabled = true;
 
     try {
-      const { licenseKey } = await chrome.storage.sync.get(['licenseKey']);
-      if (!licenseKey) throw new Error('Please activate your license in the extension popup!');
-
       const resp = await chrome.runtime.sendMessage({
         type: 'convert',
         query: input,
-        licenseKey,
+        licenseKey: licenseKey || 'FREE_TRIAL',
         provider: 'openai'
       });
 
@@ -116,8 +170,9 @@
       `;
       resultDiv.classList.remove('hidden');
 
-      const { searchCount } = await chrome.storage.sync.get(['searchCount']);
-      await chrome.storage.sync.set({ searchCount: (searchCount || 0) + 1 });
+      // Increment search count
+      await chrome.storage.sync.set({ searchCount: count + 1 });
+      await updateUsageDisplay();
 
       setTimeout(() => {
         const searchInput = document.querySelector('input[name="q"]');

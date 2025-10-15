@@ -1,61 +1,115 @@
-/* Styling for natural language UI on Scryfall */
+/* Scryfall NLP Extension Styles - Fantasy Theme */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Spectral:wght@400;600&display=swap');
 
 .nlp-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
   margin-left: 8px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
+  background: linear-gradient(135deg, #d4af37 0%, #f4e041 100%);
+  color: #1a0f0a;
+  border: 2px solid #f4e041;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(244, 224, 65, 0.4), 0 0 20px rgba(212, 175, 55, 0.3);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  letter-spacing: 1px;
 }
 
 .nlp-toggle-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(244, 224, 65, 0.6), 0 0 30px rgba(212, 175, 55, 0.5);
+  background: linear-gradient(135deg, #f4e041 0%, #d4af37 100%);
 }
 
 .nlp-container {
   margin-top: 16px;
+  animation: slideDown 0.2s ease-out;
 }
 
 .nlp-container.hidden {
   display: none;
 }
 
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .nlp-box {
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  background: linear-gradient(135deg, #2a1810 0%, #1f1108 100%);
+  border: 2px solid rgba(255, 183, 77, 0.4);
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 183, 77, 0.2), 0 0 30px rgba(210, 105, 30, 0.3);
+  font-family: 'Spectral', serif;
+  position: relative;
+  overflow: hidden;
+}
+
+.nlp-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 183, 77, 0.5), transparent);
+}
+
+.nlp-box::after {
+  content: '✨';
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 20px;
+  opacity: 0.3;
 }
 
 .nlp-label {
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #2d3748;
+  font-family: 'Cinzel', serif;
+  color: #ffb74d;
   margin-bottom: 8px;
+  letter-spacing: 0.5px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .nlp-input {
   width: 100%;
   padding: 12px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid rgba(255, 183, 77, 0.3);
   border-radius: 8px;
   font-size: 14px;
-  font-family: inherit;
+  font-family: 'Spectral', serif;
   resize: vertical;
+  transition: all 0.2s;
+  background: rgba(42, 24, 16, 0.6);
+  color: #ffd89b;
 }
 
 .nlp-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #ffb74d;
+  box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.2), 0 0 15px rgba(255, 183, 77, 0.3);
+  background: rgba(42, 24, 16, 0.9);
+}
+
+.nlp-input::placeholder {
+  color: rgba(255, 217, 155, 0.4);
 }
 
 .nlp-actions {
@@ -66,41 +120,70 @@
 
 .nlp-convert-btn {
   flex: 1;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
+  padding: 12px;
+  background: linear-gradient(135deg, #d4af37 0%, #f4e041 100%);
+  color: #1a0f0a;
+  border: 2px solid #f4e041;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
   cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(244, 224, 65, 0.4), 0 0 20px rgba(212, 175, 55, 0.3);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  letter-spacing: 1px;
 }
 
 .nlp-convert-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(244, 224, 65, 0.6), 0 0 30px rgba(212, 175, 55, 0.5);
+  background: linear-gradient(135deg, #f4e041 0%, #d4af37 100%);
 }
 
 .nlp-convert-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 .nlp-cancel-btn {
-  padding: 10px 20px;
-  background: white;
-  color: #4a5568;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
+  padding: 12px 20px;
+  background: rgba(42, 24, 16, 0.8);
+  color: #ffb74d;
+  border: 2px solid rgba(255, 183, 77, 0.3);
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
+  font-family: 'Spectral', serif;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nlp-cancel-btn:hover {
+  background: rgba(42, 24, 16, 1);
+  border-color: rgba(255, 183, 77, 0.5);
+}
+
+.nlp-usage {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(42, 24, 16, 0.6);
+  border: 1px solid rgba(255, 183, 77, 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  color: #ffd89b;
+  font-family: 'Spectral', serif;
 }
 
 .nlp-result {
   margin-top: 16px;
   padding: 16px;
-  background: white;
+  background: linear-gradient(135deg, rgba(34, 84, 61, 0.3) 0%, rgba(22, 101, 52, 0.3) 100%);
+  border: 2px solid rgba(134, 239, 172, 0.4);
   border-radius: 8px;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .nlp-result.hidden {
@@ -110,31 +193,46 @@
 .nlp-result-label {
   font-size: 12px;
   font-weight: 600;
-  color: #718096;
+  font-family: 'Cinzel', serif;
+  color: #9ae6b4;
   margin-bottom: 8px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 10px rgba(154, 230, 180, 0.5);
 }
 
 .nlp-syntax {
   display: block;
   padding: 12px;
-  background: #f7fafc;
-  border: 1px solid #e2e8f0;
+  background: rgba(42, 24, 16, 0.8);
+  border: 1px solid rgba(134, 239, 172, 0.3);
   border-radius: 6px;
-  font-family: monospace;
+  font-family: 'Courier New', monospace;
   font-size: 13px;
-  color: #2d3748;
+  color: #9ae6b4;
+  word-break: break-all;
 }
 
 .nlp-error {
-  margin-top: 12px;
+  margin-top: 16px;
   padding: 12px;
-  background: #fff5f5;
-  border: 1px solid #fc8181;
-  border-radius: 6px;
-  color: #c53030;
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.3) 0%, rgba(127, 29, 29, 0.3) 100%);
+  border: 2px solid rgba(252, 129, 129, 0.4);
+  border-radius: 8px;
+  color: #fc8181;
   font-size: 13px;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .nlp-error.hidden {
   display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

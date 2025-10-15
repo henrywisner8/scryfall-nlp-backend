@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <title>Scryfall NLP</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Spectral:wght@400;600&display=swap');
+
     * {
       margin: 0;
       padding: 0;
@@ -12,43 +14,90 @@
 
     body {
       width: 380px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
+      font-family: 'Spectral', serif;
+      background: linear-gradient(135deg, #1a0f0a 0%, #4a2511 50%, #1a0f0a 100%);
+      color: #ffd89b;
+      position: relative;
+    }
+
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at top, rgba(255, 183, 77, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom, rgba(210, 105, 30, 0.1) 0%, transparent 50%);
+      pointer-events: none;
     }
 
     .container {
       padding: 24px;
+      position: relative;
+      z-index: 1;
     }
 
     .header {
       text-align: center;
       margin-bottom: 24px;
+      position: relative;
     }
 
     .logo {
-      font-size: 48px;
-      margin-bottom: 8px;
+      font-size: 56px;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 0 20px rgba(255, 183, 77, 0.8));
+      animation: glow 3s ease-in-out infinite;
+    }
+
+    @keyframes glow {
+      0%, 100% { filter: drop-shadow(0 0 20px rgba(255, 183, 77, 0.8)); }
+      50% { filter: drop-shadow(0 0 30px rgba(255, 183, 77, 1)); }
     }
 
     .header h1 {
-      font-size: 24px;
+      font-family: 'Cinzel', serif;
+      font-size: 28px;
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
+      color: #ffb74d;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 183, 77, 0.5);
+      letter-spacing: 2px;
     }
 
     .header p {
       font-size: 13px;
       opacity: 0.9;
+      color: #ffd89b;
+      font-style: italic;
+      letter-spacing: 1px;
     }
 
     .card {
-      background: white;
+      background: linear-gradient(135deg, #2a1810 0%, #1f1108 100%);
       border-radius: 16px;
       padding: 20px;
       margin-bottom: 16px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      color: #2d3748;
+      box-shadow: 
+        0 4px 20px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 183, 77, 0.2),
+        0 0 30px rgba(210, 105, 30, 0.3);
+      color: #ffd89b;
+      border: 1px solid rgba(255, 183, 77, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 183, 77, 0.5), transparent);
     }
 
     .status-badge {
@@ -58,39 +107,60 @@
       font-size: 12px;
       font-weight: 600;
       margin-bottom: 16px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+      border: 1px solid;
     }
 
-    .status-active {
-      background: #c6f6d5;
-      color: #22543d;
+    .status-pro {
+      background: linear-gradient(135deg, #d4af37 0%, #f4e041 100%);
+      color: #1a0f0a;
+      border-color: #f4e041;
+      box-shadow: 0 0 15px rgba(244, 224, 65, 0.5);
     }
 
-    .status-inactive {
-      background: #fed7d7;
-      color: #742a2a;
+    .status-free {
+      background: linear-gradient(135deg, #ff8c42 0%, #d4af37 100%);
+      color: #1a0f0a;
+      border-color: #d4af37;
+    }
+
+    .status-limit {
+      background: linear-gradient(135deg, #8b4513 0%, #d2691e 100%);
+      color: #ffd89b;
+      border-color: #d2691e;
     }
 
     label {
       display: block;
       font-size: 13px;
       font-weight: 600;
-      color: #2d3748;
+      color: #ffb74d;
       margin-bottom: 8px;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 0.5px;
     }
 
     input[type="text"] {
       width: 100%;
       padding: 12px;
-      border: 2px solid #e2e8f0;
+      border: 2px solid rgba(255, 183, 77, 0.3);
       border-radius: 8px;
       font-size: 14px;
-      transition: border-color 0.2s;
+      font-family: 'Spectral', serif;
+      transition: all 0.2s;
+      background: rgba(42, 24, 16, 0.6);
+      color: #ffd89b;
     }
 
     input[type="text"]:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: #ffb74d;
+      box-shadow: 0 0 0 3px rgba(255, 183, 77, 0.2), 0 0 15px rgba(255, 183, 77, 0.3);
+      background: rgba(42, 24, 16, 0.9);
+    }
+
+    input[type="text"]::placeholder {
+      color: rgba(255, 217, 155, 0.4);
     }
 
     .btn {
@@ -100,20 +170,37 @@
       border-radius: 8px;
       font-size: 14px;
       font-weight: 600;
+      font-family: 'Cinzel', serif;
       cursor: pointer;
       transition: all 0.2s;
       margin-top: 12px;
+      letter-spacing: 1px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      background: linear-gradient(135deg, #d4af37 0%, #f4e041 100%);
+      color: #1a0f0a;
+      box-shadow: 0 2px 8px rgba(244, 224, 65, 0.4), 0 0 20px rgba(212, 175, 55, 0.3);
+      border: 1px solid #f4e041;
     }
 
     .btn-primary:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(244, 224, 65, 0.6), 0 0 30px rgba(212, 175, 55, 0.5);
+      background: linear-gradient(135deg, #f4e041 0%, #d4af37 100%);
+    }
+
+    .btn-upgrade {
+      background: linear-gradient(135deg, #ff8c42 0%, #ff6b35 100%);
+      color: #1a0f0a;
+      box-shadow: 0 2px 8px rgba(255, 140, 66, 0.4), 0 0 20px rgba(255, 107, 53, 0.3);
+      border: 1px solid #ff8c42;
+    }
+
+    .btn-upgrade:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 140, 66, 0.6), 0 0 30px rgba(255, 107, 53, 0.5);
     }
 
     .btn-primary:disabled {
@@ -122,29 +209,33 @@
     }
 
     .btn-secondary {
-      background: #f7fafc;
-      color: #4a5568;
-      border: 2px solid #e2e8f0;
+      background: rgba(42, 24, 16, 0.8);
+      color: #ffb74d;
+      border: 2px solid rgba(255, 183, 77, 0.3);
     }
 
     .btn-secondary:hover {
-      background: #edf2f7;
+      background: rgba(42, 24, 16, 1);
+      border-color: rgba(255, 183, 77, 0.5);
     }
 
     .help-text {
       font-size: 12px;
-      color: #718096;
+      color: rgba(255, 217, 155, 0.7);
       margin-top: 8px;
       line-height: 1.5;
     }
 
     .help-text a {
-      color: #667eea;
+      color: #ffb74d;
       text-decoration: none;
+      border-bottom: 1px solid rgba(255, 183, 77, 0.3);
+      transition: all 0.2s;
     }
 
     .help-text a:hover {
-      text-decoration: underline;
+      color: #f4e041;
+      border-bottom-color: #f4e041;
     }
 
     .alert {
@@ -153,21 +244,19 @@
       font-size: 13px;
       margin-top: 12px;
       line-height: 1.5;
+      border: 1px solid;
     }
 
     .alert-success {
-      background: #c6f6d5;
-      color: #22543d;
+      background: rgba(72, 187, 120, 0.2);
+      color: #9ae6b4;
+      border-color: rgba(72, 187, 120, 0.4);
     }
 
     .alert-error {
-      background: #fed7d7;
-      color: #742a2a;
-    }
-
-    .alert-info {
-      background: #bee3f8;
-      color: #2c5282;
+      background: rgba(245, 101, 101, 0.2);
+      color: #fc8181;
+      border-color: rgba(245, 101, 101, 0.4);
     }
 
     .hidden {
@@ -182,22 +271,32 @@
       font-size: 13px;
       font-weight: 600;
       margin-bottom: 8px;
-      color: #2d3748;
+      color: #ffb74d;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 0.5px;
     }
 
     .example-tag {
       display: inline-block;
       padding: 6px 12px;
-      background: #edf2f7;
+      background: rgba(42, 24, 16, 0.6);
       border-radius: 6px;
       font-size: 12px;
       margin: 4px 4px 4px 0;
-      color: #4a5568;
+      color: #ffd89b;
+      border: 1px solid rgba(255, 183, 77, 0.2);
+      transition: all 0.2s;
+    }
+
+    .example-tag:hover {
+      background: rgba(42, 24, 16, 0.9);
+      border-color: rgba(255, 183, 77, 0.4);
+      transform: translateY(-1px);
     }
 
     .divider {
       height: 1px;
-      background: #e2e8f0;
+      background: linear-gradient(90deg, transparent, rgba(255, 183, 77, 0.3), transparent);
       margin: 16px 0;
     }
 
@@ -213,15 +312,23 @@
     }
 
     .stat-value {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 700;
-      color: #667eea;
+      font-family: 'Cinzel', serif;
+      color: #d4af37;
+      text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+    }
+
+    .stat-value.warning {
+      color: #ff6b35;
+      text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
     }
 
     .stat-label {
       font-size: 11px;
-      color: #718096;
+      color: rgba(255, 217, 155, 0.7);
       margin-top: 4px;
+      letter-spacing: 0.5px;
     }
 
     .footer {
@@ -229,36 +336,98 @@
       padding: 16px;
       font-size: 11px;
       opacity: 0.8;
+      position: relative;
+      z-index: 1;
     }
 
     .footer a {
-      color: white;
+      color: #ffb74d;
       text-decoration: none;
       margin: 0 8px;
+      border-bottom: 1px solid transparent;
+      transition: all 0.2s;
     }
 
     .footer a:hover {
-      text-decoration: underline;
+      color: #f4e041;
+      border-bottom-color: #f4e041;
+    }
+
+    .upgrade-banner {
+      background: linear-gradient(135deg, #2a1810 0%, #4a2511 100%);
+      color: #ffd89b;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 16px;
+      border: 2px solid rgba(255, 183, 77, 0.4);
+      box-shadow: 0 0 30px rgba(210, 105, 30, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upgrade-banner::before {
+      content: '✨';
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 24px;
+      opacity: 0.3;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .upgrade-banner h2 {
+      font-family: 'Cinzel', serif;
+      font-size: 20px;
+      margin-bottom: 8px;
+      color: #ffb74d;
+      letter-spacing: 1px;
+    }
+
+    .upgrade-banner p {
+      font-size: 13px;
+      opacity: 0.95;
+      margin-bottom: 12px;
+    }
+
+    .price {
+      font-size: 36px;
+      font-weight: 700;
+      font-family: 'Cinzel', serif;
+      margin: 12px 0;
+      color: #d4af37;
+      text-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+    }
+
+    .price-label {
+      font-size: 12px;
+      opacity: 0.8;
+      font-style: italic;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">✨</div>
-      <h1>Scryfall NLP</h1>
-      <p>Natural Language Search</p>
+      <div class="logo">🔮</div>
+      <h1>SCRYFALL NLP</h1>
+      <p>Natural Language Divination</p>
     </div>
 
-    <!-- Activated State -->
-    <div id="activatedView" class="hidden">
+    <!-- PRO View (Unlimited License) -->
+    <div id="proView" class="hidden">
       <div class="card">
-        <span class="status-badge status-active">✓ Activated</span>
+        <span class="status-badge status-pro">⭐ PRO - Unlimited</span>
         
         <div class="stats">
           <div class="stat">
-            <div class="stat-value" id="searchCount">0</div>
-            <div class="stat-label">Searches</div>
+            <div class="stat-value" id="proSearchCount">0</div>
+            <div class="stat-label">Searches Used</div>
           </div>
           <div class="stat">
             <div class="stat-value">∞</div>
@@ -285,48 +454,77 @@
       </div>
     </div>
 
-    <!-- Not Activated State -->
-    <div id="notActivatedView">
+    <!-- FREE View (5 searches remaining) -->
+    <div id="freeView" class="hidden">
       <div class="card">
-        <span class="status-badge status-inactive">⚠ Not Activated</span>
+        <span class="status-badge status-free">🎁 Free Trial</span>
         
-        <label for="licenseInput">Enter License Key</label>
-        <input 
-          type="text" 
-          id="licenseInput" 
-          placeholder="SCRY-XXXX-XXXX-XXXX"
-        />
-        
-        <button class="btn btn-primary" id="activateBtn">Activate</button>
-        
-        <div id="alertBox" class="hidden"></div>
-        
-        <div class="divider"></div>
-        
-        <div class="help-text">
-          <strong>Don't have a license?</strong><br>
-          Purchase for $5 (one-time) at:<br>
-          <a href="https://buy.stripe.com/your-link" target="_blank" id="buyLink">
-            buy.stripe.com/scryfall-nlp
-          </a>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="freeSearchCount">0</div>
+            <div class="stat-label">Searches Used</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="freeRemaining">5</div>
+            <div class="stat-label">Remaining</div>
+          </div>
         </div>
+
+        <div class="divider"></div>
+
+        <div class="examples">
+          <h3>Try it on Scryfall:</h3>
+          <div class="example-tag">"blue dinosaurs"</div>
+          <div class="example-tag">"cheap red removal"</div>
+          <div class="example-tag">"legendary elves"</div>
+        </div>
+
+        <div class="help-text" style="text-align: center; margin-top: 16px;">
+          Enjoying it? <a href="#" id="upgradeFromFree">Upgrade to unlimited</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIMIT REACHED View -->
+    <div id="limitView" class="hidden">
+      <div class="upgrade-banner">
+        <h2>🎉 You've tried it!</h2>
+        <p>Upgrade to unlimited searches</p>
+        <div class="price">$4.99</div>
+        <div class="price-label">One-time payment • Lifetime access</div>
       </div>
 
       <div class="card">
+        <button class="btn btn-upgrade" id="upgradeBtn">Upgrade Now</button>
+        
+        <div class="divider"></div>
+        
         <h3 style="font-size: 14px; margin-bottom: 12px;">What you get:</h3>
         <div style="font-size: 13px; line-height: 1.8; color: #4a5568;">
           ✓ Unlimited natural language searches<br>
           ✓ Lifetime access<br>
           ✓ Works directly on Scryfall<br>
-          ✓ No subscription, pay once
+          ✓ No subscription required
         </div>
+
+        <div class="divider"></div>
+
+        <label for="licenseInput">Already have a license?</label>
+        <input 
+          type="text" 
+          id="licenseInput" 
+          placeholder="SCRY-XXXX-XXXX-XXXX"
+        />
+        <button class="btn btn-primary" id="activateBtn">Activate</button>
+        
+        <div id="alertBox" class="hidden"></div>
       </div>
     </div>
   </div>
 
   <div class="footer">
     <a href="#" id="helpLink">Help</a>
-    <a href="#" id="supportLink">Support</a>
+    <a href="mailto:henrywisner8@gmail.com" id="supportLink">Support</a>
   </div>
 
   <script src="popup.js"></script>

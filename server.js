@@ -243,7 +243,12 @@ function requireLicense(req, res, next) {
     return res.status(401).json({ error: 'License key required' });
   }
   
-  // Check license validity from database
+  // Allow free trial users
+  if (key === 'FREE_TRIAL') {
+    return next();
+  }
+  
+  // Check license validity from database for paid users
   isLicenseValid(key).then(valid => {
     if (!valid) {
       setRateHeaders(res, MAX_REQUESTS, Date.now() + WINDOW_MS);

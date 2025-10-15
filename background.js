@@ -1,39 +1,52 @@
+// background.js – handles API calls and upgrade link
 const BACKEND_URL = 'https://scryfall-nlp-backend-production.up.railway.app';
+const PAYMENT_LINK = 'https://buy.stripe.com/14k7sNacaNu0pG8I2kbw0';
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  const done = (payload) => { try { sendResponse(payload); } catch {} };
-
-  if (msg?.type === 'convert') {
-    (async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/convert`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: msg.query, licenseKey: msg.licenseKey })
-        });
-        const data = await res.json();
-        done({ ok: true, data });
-      } catch (e) {
-        done({ ok: false, error: String(e.message || e) });
-      }
-    })();
-    return true; // keep channel open
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'convert') {
+    handleConvert(request, sendResponse);
+    return true; // Keep channel open for async response
   }
-
-  if (msg?.type === 'validate') {
-    (async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/validate-license`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ licenseKey: msg.licenseKey })
-        });
-        const data = await res.json();
-        done({ ok: true, data });
-      } catch (e) {
-        done({ ok: false, error: String(e.message || e) });
-      }
-    })();
-    return true;
+  
+  if (request.type === 'openUpgrade') {
+    chrome.tabs.create({ url: PAYMENT_LINK });
+    return false;
   }
 });
+
+async function handleConvert(request, sendResponse) {
+  const { query, licenseKey, provider } = request;
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        licenseKey,
+        provider: provider || 'openai'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      sendResponse({
+        ok: false,
+        error: errorData.error || `Server error: ${response.status}`
+      });
+      return;
+    }
+
+    const data = await response.json();
+    sendResponse({
+      ok: true,
+      data: data
+    });
+  } catch (error) {
+    console.error('Conversion error:', error);
+    sendResponse({
+      ok: false,
+      error: error.message || 'Network error'
+    });
+  }
+}
