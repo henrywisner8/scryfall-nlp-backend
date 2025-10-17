@@ -22,7 +22,7 @@
     const toggleButton = document.createElement('button');
     toggleButton.id = 'nlp-toggle';
     toggleButton.type = 'button';
-    toggleButton.innerHTML = '🔮 Natural Language';
+    toggleButton.innerHTML = '✨ Natural Language';
     toggleButton.className = 'nlp-toggle-btn';
 
     const nlContainer = document.createElement('div');
