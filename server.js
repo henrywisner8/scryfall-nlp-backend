@@ -458,14 +458,22 @@ EXAMPLES:
 "red dragons with flying" → t:creature t:dragon c:r kw:flying
 "black zombies modern legal power 2-5" → t:creature t:zombie c:b f:modern pow>=2 pow<=5
 "legendary elves from Dominaria" → t:legendary t:creature t:elf s:dom
-"cheap red removal" → c:r (o:destroy OR o:exile) mv<=3
+"cheap red removal" → c:r function:removal mv<=3
 "white or blue angels" → t:creature t:angel (c:w OR c:u)
 "creatures with lifelink" → t:creature kw:lifelink
 "elves with reach" → t:creature t:elf kw:reach
+"green ramp spells" → c:g function:ramp
+"counterspells under 3 mana" → function:counterspell mv<3
+"cards with squirrels in the art" → art:squirrel
+"dragons breathing fire" → art:dragon art:fire
+"cards featuring someone wearing a crown" → art:crown
+"graveyard hate cards" → function:graveyard-hate
 
 REMEMBER: 
 - Creature types (bear, elf, dragon, etc.) ALWAYS use t:<type> syntax
 - Keyword abilities (flying, vigilance, etc.) ALWAYS use kw:<keyword> syntax
+- Common Magic functions (ramp, removal, counterspell, etc.) use function:<tag> syntax
+- Artwork descriptions ALWAYS use art:<tag> syntax
 - Only use o: for non-keyword rules text
 
 Output syntax only.`;
