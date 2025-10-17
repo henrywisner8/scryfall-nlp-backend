@@ -1,6 +1,6 @@
 const BACKEND_URL = 'https://scryfall-nlp-backend-production.up.railway.app';
 const FREE_SEARCH_LIMIT = 5;
-const PAYMENT_LINK = 'https://buy.stripe.com/14A7sM1mCa0W6Mp8ww';
+const PAYMENT_LINK = 'https://buy.stripe.com/14A7sM1mCa0W6Mp8Dl2kw00';
 
 document.addEventListener('DOMContentLoaded', init);
 
