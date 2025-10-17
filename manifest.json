@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Scryfall Natural Language Search",
+  "name": "Scryfall Easy Search",
   "version": "1.0.0",
   "description": "Search Magic cards on Scryfall using plain English.",
   "action": { "default_popup": "popup.html" },
