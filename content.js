@@ -84,32 +84,39 @@
   }
 
   async function updateUsageDisplay() {
-    const { licenseKey, searchCount } = await chrome.storage.sync.get(['licenseKey', 'searchCount']);
     const usageDiv = document.getElementById('nlp-usage');
-    const count = searchCount || 0;
+    if (!usageDiv) return;
+    
+    try {
+      const { licenseKey, searchCount } = await chrome.storage.sync.get(['licenseKey', 'searchCount']);
+      const count = searchCount || 0;
 
-    if (licenseKey) {
-      // Has license - unlimited
-      usageDiv.innerHTML = `<span style="color: #22543d;">⭐ PRO: Unlimited searches</span>`;
-      usageDiv.classList.remove('hidden');
-    } else if (count >= FREE_SEARCH_LIMIT) {
-      // Limit reached
-      usageDiv.innerHTML = `<span style="color: #742a2a;">🔒 Free limit reached. <a href="#" id="nlp-upgrade-link" style="color: #667eea; text-decoration: underline;">Upgrade for unlimited</a></span>`;
-      usageDiv.classList.remove('hidden');
-      
-      // Add click handler for upgrade link
-      setTimeout(() => {
-        document.getElementById('nlp-upgrade-link')?.addEventListener('click', (e) => {
-          e.preventDefault();
-          chrome.runtime.sendMessage({ type: 'openUpgrade' });
-        });
-      }, 100);
-    } else {
-      // Free searches remaining
-      const remaining = FREE_SEARCH_LIMIT - count;
-      const color = remaining <= 1 ? '#c53030' : '#2c5282';
-      usageDiv.innerHTML = `<span style="color: ${color};">🎁 Free trial: ${remaining} search${remaining !== 1 ? 'es' : ''} remaining</span>`;
-      usageDiv.classList.remove('hidden');
+      if (licenseKey) {
+        // Has license - unlimited
+        usageDiv.innerHTML = `<span style="color: #22543d;">⭐ PRO: Unlimited searches</span>`;
+        usageDiv.classList.remove('hidden');
+      } else if (count >= FREE_SEARCH_LIMIT) {
+        // Limit reached
+        usageDiv.innerHTML = `<span style="color: #742a2a;">🔒 Free limit reached. <a href="#" id="nlp-upgrade-link" style="color: #667eea; text-decoration: underline;">Upgrade for unlimited</a></span>`;
+        usageDiv.classList.remove('hidden');
+        
+        // Add click handler for upgrade link
+        setTimeout(() => {
+          document.getElementById('nlp-upgrade-link')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            chrome.runtime.sendMessage({ type: 'openUpgrade' });
+          });
+        }, 100);
+      } else {
+        // Free searches remaining
+        const remaining = FREE_SEARCH_LIMIT - count;
+        const color = remaining <= 1 ? '#c53030' : '#2c5282';
+        usageDiv.innerHTML = `<span style="color: ${color};">🎁 Free trial: ${remaining} search${remaining !== 1 ? 'es' : ''} remaining</span>`;
+        usageDiv.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error updating usage display:', error);
+      usageDiv.classList.add('hidden');
     }
   }
 
