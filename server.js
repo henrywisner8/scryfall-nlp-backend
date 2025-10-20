@@ -444,7 +444,7 @@ usd>=5 usd<=10
 BOOLEAN LOGIC:
 Space = AND
 OR with parens: (c:w OR c:u)
-NOT: -t:creature
+NOT: -t:
 
 SET SELECTION:
 - If "RESOLVED SET CODES" or "CANDIDATE SETS" appear below, follow them strictly.
@@ -468,7 +468,7 @@ EXAMPLES:
 "dragons breathing fire" → art:dragon art:fire
 "cards featuring someone wearing a crown" → art:crown
 "graveyard hate cards" → function:graveyard-hate
-
+"tutor" - function:tutor
 REMEMBER: 
 - Creature types (bear, elf, dragon, etc.) ALWAYS use t:<type> syntax
 - Keyword abilities (flying, vigilance, etc.) ALWAYS use kw:<keyword> syntax
