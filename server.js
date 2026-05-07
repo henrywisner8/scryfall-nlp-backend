@@ -261,7 +261,7 @@ function requireLicense(req, res, next) {
   });
 }
 
-// ---------- Stripe webhook (MUST be FIRST route, BEFORE any body parsers) ----------
+// ---------- Stripe webhook
 app.post(
   '/stripe/webhook',
   express.raw({ type: 'application/json' }),
@@ -386,7 +386,7 @@ Keep this email safe - you'll need your license key to use the extension.`
   }
 );
 
-// Now add express.json for all other routes
+// add express.json for all other routes
 app.use(express.json());
 
 // ---------- system prompt ----------
